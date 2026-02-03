@@ -15,35 +15,35 @@ Usage:
     client = Client(api_key="mb_live_xxx")
 """
 
-import httpx
 from datetime import datetime
-from typing import Optional, Dict, Any, List, Union
+from typing import Any, Dict, List, Optional
 
-from .auth import AuthStrategy, APIKeyAuth, WalletAuth, get_auth_from_env
-from .models import (
-    Bot,
-    Runtime,
-    Deployment,
-    Snapshot,
-    Clone,
-    ThreatLevel,
-    ResourceLimits,
-    Region,
-    SnapshotType,
-    WalletBalance,
-    ThreatSignal,
-    ThreatLevelValue,
-)
+import httpx
+
+from .auth import APIKeyAuth, AuthStrategy, WalletAuth, get_auth_from_env
 from .exceptions import (
-    MoltbunkerError,
     AuthenticationError,
+    ConnectionError,
+    InsufficientFundsError,
+    MoltbunkerError,
     NotFoundError,
     RateLimitError,
-    InsufficientFundsError,
-    ConnectionError,
     TimeoutError,
 )
-
+from .models import (
+    Bot,
+    Clone,
+    Deployment,
+    Region,
+    ResourceLimits,
+    Runtime,
+    Snapshot,
+    SnapshotType,
+    ThreatLevel,
+    ThreatLevelValue,
+    ThreatSignal,
+    WalletBalance,
+)
 
 DEFAULT_BASE_URL = "https://api.moltbunker.com/v1"
 DEFAULT_TIMEOUT = 30.0

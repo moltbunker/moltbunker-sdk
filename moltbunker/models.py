@@ -2,12 +2,12 @@
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Dict, Any, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, PrivateAttr
 
 if TYPE_CHECKING:
-    from .client import Client, AsyncClient
+    pass
 
 
 class Region(str, Enum):
