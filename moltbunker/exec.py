@@ -4,18 +4,13 @@ Interactive container exec over WebSocket with binary frame protocol.
 Requires [wallet] + [ws] extras: pip install 'moltbunker[full]'
 """
 
-import json
+import importlib.util
 import logging
 import struct
 import threading
 from typing import Any, Callable, Dict, Optional
 
-try:
-    import websockets
-
-    HAS_WEBSOCKETS = True
-except ImportError:
-    HAS_WEBSOCKETS = False
+HAS_WEBSOCKETS = importlib.util.find_spec("websockets") is not None
 
 try:
     from eth_account import Account

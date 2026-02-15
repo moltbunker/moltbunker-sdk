@@ -11,7 +11,6 @@ import time
 from typing import Any, Callable, Dict, Optional
 
 try:
-    import websockets
     import websockets.sync.client as ws_sync
 
     HAS_WEBSOCKETS = True
@@ -270,8 +269,6 @@ class AsyncEventStream:
                             {"type": "subscribe", "data": {"channels": channels}}
                         )
 
-                    last_ping = asyncio.get_event_loop().time()
-
                     while self._running:
                         try:
                             msg_str = await asyncio.wait_for(
@@ -303,7 +300,6 @@ class AsyncEventStream:
             backoff = min(backoff * 2, _MAX_BACKOFF)
 
     async def _handle_message(self, msg: Dict[str, Any]) -> None:
-        import asyncio
         import inspect
 
         msg_type = msg.get("type", "")
