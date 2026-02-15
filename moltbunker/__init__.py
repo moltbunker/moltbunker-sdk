@@ -36,8 +36,9 @@ Usage - Async Client:
         deployment = await bot.adeploy()
 """
 
-from .auth import APIKeyAuth, AuthStrategy, WalletAuth, get_auth_from_env
+from .auth import APIKeyAuth, AuthStrategy, WalletAuth, WalletSessionAuth, get_auth_from_env
 from .client import AsyncClient, Client
+from .events import AsyncEventStream, EventStream
 from .exceptions import (
     AuthenticationError,
     BotNotFoundError,
@@ -54,17 +55,26 @@ from .exceptions import (
     TimeoutError,
     ValidationError,
 )
+from .exec import AsyncExecSession, ExecSession
 from .models import (
     Bot,
     BotStatus,
+    Catalog,
+    CatalogCategory,
+    CatalogPreset,
+    CatalogTier,
     Clone,
     CloneStatus,
     CloningConfig,
     Container,
+    ContainerInfo,
     ContainerStatus,
     Deployment,
+    Migration,
+    MigrationStatus,
     NetworkMode,
     Region,
+    ReplicaLocation,
     ResourceLimits,
     Runtime,
     RuntimeStatus,
@@ -76,7 +86,7 @@ from .models import (
     WalletBalance,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __all__ = [
     # Clients
     "Client",
@@ -85,7 +95,14 @@ __all__ = [
     "AuthStrategy",
     "APIKeyAuth",
     "WalletAuth",
+    "WalletSessionAuth",
     "get_auth_from_env",
+    # Events
+    "EventStream",
+    "AsyncEventStream",
+    # Exec
+    "ExecSession",
+    "AsyncExecSession",
     # Models
     "Bot",
     "Runtime",
@@ -96,6 +113,8 @@ __all__ = [
     "ThreatSignal",
     "ThreatLevelValue",
     "Container",
+    "ContainerInfo",
+    "ReplicaLocation",
     "ResourceLimits",
     "Region",
     "SnapshotType",
@@ -106,6 +125,12 @@ __all__ = [
     "RuntimeStatus",
     "NetworkMode",
     "WalletBalance",
+    "Catalog",
+    "CatalogPreset",
+    "CatalogCategory",
+    "CatalogTier",
+    "Migration",
+    "MigrationStatus",
     # Exceptions
     "MoltbunkerError",
     "AuthenticationError",
