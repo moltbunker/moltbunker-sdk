@@ -108,7 +108,7 @@ class ThreatSignal(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     source: str
     details: Optional[str] = None
-    timestamp: datetime
+    timestamp: Optional[datetime] = None
 
 
 class ThreatLevel(BaseModel):
@@ -118,7 +118,7 @@ class ThreatLevel(BaseModel):
     level: ThreatLevelValue
     recommendation: str
     active_signals: List[ThreatSignal] = Field(default_factory=list)
-    timestamp: datetime
+    timestamp: Optional[datetime] = None
 
 
 class Container(BaseModel):
@@ -130,7 +130,7 @@ class Container(BaseModel):
     status: ContainerStatus
     node_id: str
     region: str
-    created_at: datetime
+    created_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
     resources: Optional[ResourceLimits] = None
     metadata: Dict[str, str] = Field(default_factory=dict)
@@ -150,7 +150,7 @@ class Snapshot(BaseModel):
     compressed: bool = False
     encrypted: bool = False
     parent_id: Optional[str] = None
-    created_at: datetime
+    created_at: Optional[datetime] = None
     metadata: Dict[str, str] = Field(default_factory=dict)
 
     model_config = {"use_enum_values": True}
@@ -168,7 +168,7 @@ class Clone(BaseModel):
     priority: int = 2
     reason: str
     snapshot_id: Optional[str] = None
-    created_at: datetime
+    created_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     error: Optional[str] = None
 
@@ -204,7 +204,7 @@ class Bot(BaseModel):
     resources: ResourceLimits
     region: str
     metadata: Dict[str, str] = Field(default_factory=dict)
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
     # Private attributes
     _client: Optional[Any] = PrivateAttr(default=None)
@@ -556,7 +556,7 @@ class Runtime(BaseModel):
     node_id: str
     region: str
     resources: ResourceLimits
-    expires_at: datetime
+    expires_at: Optional[datetime] = None
 
     _client: Optional[Any] = PrivateAttr(default=None)
 
@@ -666,7 +666,7 @@ class Deployment(BaseModel):
     status: ContainerStatus
     region: str
     node_id: str
-    created_at: datetime
+    created_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
     onion_address: Optional[str] = None
 
@@ -838,7 +838,7 @@ class ContainerInfo(BaseModel):
     id: str
     image: str
     status: str
-    created_at: datetime
+    created_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
     encrypted: bool = False
     onion_address: Optional[str] = None
