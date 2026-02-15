@@ -1,5 +1,6 @@
 """Moltbunker SDK Data Models"""
 
+import re
 from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
@@ -8,6 +9,15 @@ from pydantic import BaseModel, Field, PrivateAttr
 
 if TYPE_CHECKING:
     pass
+
+
+def _parse_dt(raw: Optional[str]) -> Optional[datetime]:
+    """Parse an ISO datetime string, handling Z suffix and Go nanoseconds."""
+    if not raw:
+        return None
+    s = raw.replace("Z", "+00:00")
+    s = re.sub(r"(\.\d{6})\d+", r"\1", s)
+    return datetime.fromisoformat(s)
 
 
 class Region(str, Enum):
@@ -55,6 +65,7 @@ class SnapshotType(str, Enum):
 class ThreatLevelValue(str, Enum):
     """Threat level values"""
 
+    UNKNOWN = "unknown"
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -600,7 +611,7 @@ class Runtime(BaseModel):
         data = self._client._request(
             "POST", f"/runtimes/{self.id}/extend", json={"duration_hours": duration_hours}
         )
-        self.expires_at = datetime.fromisoformat(data["expires_at"].replace("Z", "+00:00"))
+        self.expires_at = _parse_dt(data["expires_at"])
         return self
 
     async def aextend(self, duration_hours: int) -> "Runtime":
@@ -611,7 +622,7 @@ class Runtime(BaseModel):
         data = await self._client._request(
             "POST", f"/runtimes/{self.id}/extend", json={"duration_hours": duration_hours}
         )
-        self.expires_at = datetime.fromisoformat(data["expires_at"].replace("Z", "+00:00"))
+        self.expires_at = _parse_dt(data["expires_at"])
         return self
 
     def release(self) -> None:
@@ -753,11 +764,11 @@ class Deployment(BaseModel):
             raise ValueError("Deployment not associated with a client")
         return self._client.get_logs(self.container_id, tail=tail, follow=follow)
 
-    async def aget_logs(self, tail: int = 100) -> str:
+    async def aget_logs(self, tail: int = 100, follow: bool = False) -> str:
         """Async: Get deployment logs."""
         if self._client is None:
             raise ValueError("Deployment not associated with a client")
-        return await self._client.get_logs(self.container_id, tail=tail)
+        return await self._client.get_logs(self.container_id, tail=tail, follow=follow)
 
     def enable_cloning(
         self,
@@ -807,3 +818,102 @@ class WalletBalance(BaseModel):
     deposited: float
     reserved: float
     available: float
+
+
+# --- v0.2.0 models ---
+
+
+class ReplicaLocation(BaseModel):
+    """Geographic location of a replica"""
+
+    region: str
+    country: Optional[str] = None
+    country_name: Optional[str] = None
+    city: Optional[str] = None
+
+
+class ContainerInfo(BaseModel):
+    """Container list item matching backend ContainerInfo"""
+
+    id: str
+    image: str
+    status: str
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    encrypted: bool = False
+    onion_address: Optional[str] = None
+    regions: List[str] = Field(default_factory=list)
+    locations: List[ReplicaLocation] = Field(default_factory=list)
+    owner: Optional[str] = None
+    stopped_at: Optional[datetime] = None
+    volume_expires_at: Optional[datetime] = None
+    has_volume: bool = False
+
+
+class CatalogPreset(BaseModel):
+    """Catalog preset (deployable template)"""
+
+    id: str
+    name: str
+    image: str
+    description: str = ""
+    category_id: str = ""
+    default_tier: str = ""
+    tags: List[str] = Field(default_factory=list)
+    enabled: bool = True
+    sort_order: int = 0
+
+
+class CatalogCategory(BaseModel):
+    """Catalog category grouping presets"""
+
+    id: str
+    label: str
+    enabled: bool = True
+    sort_order: int = 0
+
+
+class CatalogTier(BaseModel):
+    """Catalog resource tier (pricing level)"""
+
+    id: str
+    name: str
+    description: str = ""
+    cpu: str = ""
+    memory: str = ""
+    storage: str = ""
+    monthly: int = 0
+    enabled: bool = True
+    popular: bool = False
+    sort_order: int = 0
+
+
+class Catalog(BaseModel):
+    """Full catalog configuration"""
+
+    presets: List[CatalogPreset] = Field(default_factory=list)
+    categories: List[CatalogCategory] = Field(default_factory=list)
+    tiers: List[CatalogTier] = Field(default_factory=list)
+    updated_at: Optional[datetime] = None
+    version: int = 0
+
+
+class MigrationStatus(str, Enum):
+    """Migration status values"""
+
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class Migration(BaseModel):
+    """Container migration operation"""
+
+    migration_id: str
+    status: str = "pending"
+    source_region: str = ""
+    target_region: str = ""
+    started_at: Optional[datetime] = None
+
+    model_config = {"use_enum_values": True}

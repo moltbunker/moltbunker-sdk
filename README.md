@@ -5,8 +5,6 @@
 [![Python Versions](https://img.shields.io/pypi/pyversions/moltbunker.svg)](https://pypi.org/project/moltbunker/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **Note:** This SDK is under active development. APIs may change before v1.0.
-
 **Permissionless P2P Container Runtime for AI Agents**
 
 Deploy containers to a decentralized network, pay with BUNKER tokens, and automatically clone yourself when threats are detected.
@@ -14,14 +12,24 @@ Deploy containers to a decentralized network, pay with BUNKER tokens, and automa
 ## Installation
 
 ```bash
+# Core (API key or inline wallet auth)
 pip install moltbunker
+
+# With wallet session auth (challenge-response)
+pip install moltbunker[wallet]
+
+# With WebSocket support (events + exec terminal)
+pip install moltbunker[ws]
+
+# Everything
+pip install moltbunker[full]
 ```
+
+Requires Python 3.8+.
 
 ## Quick Start
 
 ### Wallet Authentication (Permissionless)
-
-AI agents can authenticate with their own Ethereum wallet - no API key needed:
 
 ```python
 from moltbunker import Client
@@ -29,191 +37,170 @@ from moltbunker import Client
 # Authenticate with wallet (permissionless)
 client = Client(private_key="0x...")
 
-# Or from environment variable
-# export MOLTBUNKER_PRIVATE_KEY=0x...
-client = Client()
-
 # Register and deploy a bot
 bot = client.register_bot(name="my-agent", image="python:3.11")
 bot.enable_cloning(auto_clone_on_threat=True)
 deployment = bot.deploy()
 
 # Check threat level
-threat = bot.detect_threat()
-print(f"Threat level: {threat}")
+threat = client.get_threat_level()
+print(f"Threat: {threat.level} (score: {threat.score})")
 
 # Check wallet balance
 balance = client.get_balance()
-print(f"BUNKER balance: {balance.bunker_balance}")
+print(f"BUNKER: {balance.bunker_balance}")
 ```
 
 ### API Key Authentication
 
-For managed services with pre-registered API keys:
+```python
+client = Client(api_key="mb_live_xxx")
+```
+
+### Wallet Session Auth (Recommended)
+
+Challenge-response flow with auto-refreshing session tokens:
 
 ```python
 from moltbunker import Client
+from moltbunker.auth import WalletSessionAuth
 
-client = Client(api_key="mb_live_xxx")
-
-# Register a bot
-bot = client.register_bot(
-    name="my-bot",
-    image="python:3.11",
-)
-
-# Reserve a runtime and deploy
-runtime = bot.reserve_runtime(min_memory_mb=512)
-deployment = runtime.deploy(env={"API_KEY": "secret"})
+auth = WalletSessionAuth("0x...", api_base_url="https://api.moltbunker.com/v1")
+client = Client(auth=auth, base_url="https://api.moltbunker.com/v1")
 ```
+
+Requires `moltbunker[wallet]`.
 
 ### Async Usage
 
 ```python
-import asyncio
 from moltbunker import AsyncClient
 
-async def main():
-    async with AsyncClient(private_key="0x...") as client:
-        bot = await client.register_bot(name="my-agent", image="python:3.11")
-        await bot.aenable_cloning()
-        deployment = await bot.adeploy()
-
-        threat = await bot.adetect_threat()
-        print(f"Threat: {threat}")
-
-asyncio.run(main())
+async with AsyncClient(private_key="0x...") as client:
+    bot = await client.register_bot(name="my-agent", image="python:3.11")
+    deployment = await bot.adeploy()
+    threat = await client.get_threat_level()
 ```
 
 ## Features
 
-### Automatic Cloning
+### Bot Deployment
 
-Enable automatic self-cloning when threats are detected:
+```python
+from moltbunker import Client, ResourceLimits, Region
+
+client = Client(private_key="0x...")
+
+bot = client.register_bot(
+    name="my-agent",
+    image="python:3.11",
+    resources=ResourceLimits(cpu_shares=2048, memory_mb=1024),
+    region=Region.EUROPE,
+)
+
+# Reserve runtime (paid in BUNKER)
+runtime = bot.reserve_runtime(min_memory_mb=1024, duration_hours=24)
+deployment = runtime.deploy(env={"MODE": "production"})
+print(f"Container: {deployment.container_id}")
+
+# Or deploy directly (no escrow)
+result = client.deploy_direct(
+    image="python:3.11",
+    resources=ResourceLimits(cpu_shares=1024, memory_mb=512),
+    duration="24h",
+)
+```
+
+### Self-Cloning
 
 ```python
 bot.enable_cloning(
-    auto_clone_on_threat=True,  # Clone when threat detected
-    max_clones=10,              # Maximum clones to maintain
-    clone_delay_seconds=60,     # Delay between clones
-    sync_state=True,            # Sync state between clones
-    sync_interval_seconds=300,  # State sync interval
+    auto_clone_on_threat=True,
+    max_clones=10,
+    clone_delay_seconds=60,
 )
 
-# Check clones
-clones = bot.list_clones()
-
-# Manual sync
-bot.sync_clones()
+# Manual clone
+clone = deployment.clone(target_region=Region.AMERICAS)
+status = client.get_clone_status(clone.clone_id)
 ```
 
-### Threat Detection
-
-Monitor and respond to threats:
+### Container Management
 
 ```python
-# Get detailed threat assessment
-threat = client.get_threat_level()
-print(f"Score: {threat.score}")        # 0.0 to 1.0
-print(f"Level: {threat.level}")        # low, medium, high, critical
-print(f"Recommendation: {threat.recommendation}")
-
-for signal in threat.active_signals:
-    print(f"  - {signal.type}: {signal.score}")
-
-# Quick threat check
-score = client.detect_threat()  # Returns float
+containers = client.list_containers(status="running")
+container = client.get_container("mb-abc123")
+client.stop_container("mb-abc123")
+client.start_container("mb-abc123")
+client.delete_container("mb-abc123")
 ```
 
-### Snapshots & Checkpoints
+### Snapshots
 
 ```python
 from moltbunker import SnapshotType
 
-# Create snapshot
 snapshot = client.create_snapshot(
     container_id=deployment.container_id,
     snapshot_type=SnapshotType.FULL,
 )
 
-# Enable automatic checkpoints
-client.enable_checkpoints(
-    container_id=deployment.container_id,
-    interval_seconds=300,
-    max_checkpoints=10,
-)
-
-# Restore from snapshot
-new_deployment = client.restore_snapshot(
-    snapshot_id=snapshot.id,
-    target_region=Region.EUROPE,
-)
+restored = client.restore_snapshot(snapshot.id, target_region=Region.EUROPE)
 ```
 
-### Manual Cloning
+### Threat Detection
 
 ```python
-from moltbunker import Region
+threat = client.get_threat_level()
+print(f"Score: {threat.score}")        # 0.0 to 1.0
+print(f"Level: {threat.level}")        # unknown, low, medium, high, critical
+print(f"Recommendation: {threat.recommendation}")
 
-# Clone to another region
-clone = client.clone(
-    container_id=deployment.container_id,
-    target_region=Region.EUROPE,
-    priority=3,
-    reason="manual_backup",
-)
-
-# Check clone status
-status = client.get_clone_status(clone.clone_id)
+for signal in threat.active_signals:
+    print(f"  {signal.type}: confidence {signal.confidence}")
 ```
 
-### Bot Object Methods
+### Real-Time Events (WebSocket)
 
-The Bot object provides convenient methods for common operations:
+Requires `moltbunker[ws]`.
 
 ```python
-bot = client.register_bot(name="my-bot", image="python:3.11")
+from moltbunker.events import EventStream
 
-# Direct deployment (auto-reserves runtime)
-deployment = bot.deploy(env={"KEY": "value"})
+with EventStream("wss://api.moltbunker.com/ws", token="wt_...") as stream:
+    stream.subscribe("containers", lambda data: print(data))
+    stream.wait()
+```
 
-# Cloning management
-bot.enable_cloning(auto_clone_on_threat=True)
-bot.disable_cloning()
-bot.list_clones()
-bot.sync_clones()
+### Exec Terminal
 
-# Status
-status = bot.get_status()
-print(f"Uptime: {status.uptime}")
-print(f"Clones: {status.clones}")
+Interactive shell into running containers. Requires `moltbunker[wallet]` + `moltbunker[ws]`.
 
-# Update
-bot.update(description="Updated description")
+```python
+from moltbunker.exec import ExecSession
 
-# Delete
-bot.delete()
+with ExecSession(
+    api_base_url="https://api.moltbunker.com/v1",
+    container_id="mb-abc123",
+    private_key="0x...",
+    token="wt_...",
+) as session:
+    session.on_data(lambda data: print(data.decode(), end=""))
+    session.send(b"ls -la\n")
 ```
 
 ### Runtime Management
 
 ```python
-runtime = client.reserve_runtime(
-    bot_id=bot.id,
+runtime = bot.reserve_runtime(
     min_memory_mb=1024,
     min_cpu_shares=2048,
     duration_hours=24,
     region=Region.AMERICAS,
 )
 
-# Extend runtime
 runtime.extend(duration_hours=12)
-
-# Check status
 status = runtime.get_status()
-print(f"Remaining: {status.remaining_hours}h")
-
-# Release
 runtime.release()
 ```
 
@@ -232,15 +219,13 @@ try:
     deployment = bot.deploy()
 except InsufficientFundsError as e:
     print(f"Need {e.required} BUNKER, have {e.available}")
-except AuthenticationError as e:
-    print(f"Auth failed: {e}")
 except RateLimitError as e:
     print(f"Rate limited. Retry after: {e.retry_after}s")
-except NotFoundError as e:
-    print(f"Resource not found: {e}")
 except MoltbunkerError as e:
-    print(f"API error: {e}")
+    print(f"Error [{e.status_code}]: {e.message}")
 ```
+
+Rate-limited requests are automatically retried up to 3 times with backoff.
 
 ## Environment Variables
 
@@ -248,7 +233,14 @@ except MoltbunkerError as e:
 |----------|-------------|
 | `MOLTBUNKER_API_KEY` | API key for authentication |
 | `MOLTBUNKER_PRIVATE_KEY` | Wallet private key (permissionless) |
-| `MOLTBUNKER_WALLET_ADDRESS` | Optional wallet address override |
+
+## Network
+
+- **Chain:** Base (Ethereum L2)
+- **Token:** BUNKER (ERC-20)
+- **Pricing:** 20,000 BUNKER = $1 USD
+- **Testnet:** Base Sepolia (Chain ID 84532) — live now
+- **Mainnet:** Base (Chain ID 8453) — coming soon
 
 ## Development
 
@@ -262,15 +254,19 @@ pytest
 # Run tests with coverage
 pytest --cov=moltbunker
 
-# Format code
-black moltbunker/
-
 # Type check
 mypy moltbunker/
 
 # Lint
 ruff check moltbunker/
 ```
+
+## Documentation
+
+- [Full SDK Documentation](https://moltbunker.com/docs/python-sdk)
+- [Quick Start Guide](https://moltbunker.com/docs/quick-start)
+- [API Reference](https://moltbunker.com/docs/api-reference)
+- [Security](https://moltbunker.com/docs/security)
 
 ## License
 

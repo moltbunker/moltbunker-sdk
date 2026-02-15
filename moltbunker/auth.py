@@ -99,7 +99,7 @@ class WalletAuth(AuthStrategy):
         if not HAS_WEB3:
             raise ImportError(
                 "Wallet authentication requires web3 and eth-account. "
-                "Install with: pip install moltbunker"
+                "Install with: pip install 'moltbunker[wallet]'"
             )
 
         if not private_key:
@@ -159,6 +159,104 @@ class WalletAuth(AuthStrategy):
         """
         signed = self.account.sign_transaction(transaction)
         return signed.rawTransaction.hex()
+
+
+class WalletSessionAuth(AuthStrategy):
+    """Session-based wallet authentication using challenge-response.
+
+    Performs EIP-191 challenge-response against the API to obtain a session token
+    (wt_<hex>), then uses that token as a Bearer header. Auto-refreshes on 401.
+
+    Requires the [wallet] extra: pip install 'moltbunker[wallet]'
+    """
+
+    def __init__(
+        self,
+        private_key: str,
+        api_base_url: str = "https://api.moltbunker.com/v1",
+        wallet_address: Optional[str] = None,
+    ):
+        if not HAS_WEB3:
+            raise ImportError(
+                "WalletSessionAuth requires web3 and eth-account. "
+                "Install with: pip install 'moltbunker[wallet]'"
+            )
+
+        if not private_key:
+            raise ValueError("private_key cannot be empty")
+
+        if not private_key.startswith("0x"):
+            private_key = "0x" + private_key
+
+        self._private_key = private_key
+        self._account = Account.from_key(private_key)
+        self._wallet_address = wallet_address or self._account.address
+        self._api_base_url = api_base_url.rstrip("/")
+        self._session_token: Optional[str] = None
+        self._token_expires_at: float = 0.0
+
+    def _authenticate(self) -> None:
+        """Perform challenge-response to get a session token."""
+        import httpx
+
+        # Step 1: Get challenge
+        resp = httpx.post(
+            f"{self._api_base_url}/auth/challenge",
+            json={"address": self._wallet_address},
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+        challenge = resp.json()
+
+        # Step 2: Sign challenge message with EIP-191
+        message_encoded = encode_defunct(text=challenge["message"])
+        signed = self._account.sign_message(message_encoded)
+
+        # Step 3: Verify signature and get session token
+        resp = httpx.post(
+            f"{self._api_base_url}/auth/verify",
+            json={
+                "address": self._wallet_address,
+                "message": challenge["message"],
+                "signature": "0x" + signed.signature.hex(),
+            },
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        self._session_token = data["access_token"]
+        self._token_expires_at = time.time() + data.get("expires_in", 3600) - 60
+
+    def _ensure_token(self) -> str:
+        """Ensure we have a valid session token, refreshing if needed."""
+        if self._session_token is None or time.time() >= self._token_expires_at:
+            self._authenticate()
+        assert self._session_token is not None
+        return self._session_token
+
+    def refresh(self) -> None:
+        """Force re-authentication (e.g. after a 401)."""
+        self._session_token = None
+        self._token_expires_at = 0.0
+        self._authenticate()
+
+    def get_auth_headers(self, message: Optional[str] = None) -> Dict[str, str]:
+        """Get Bearer session token header."""
+        token = self._ensure_token()
+        return {"Authorization": f"Bearer {token}"}
+
+    @property
+    def identifier(self) -> str:
+        return self._wallet_address
+
+    @property
+    def auth_type(self) -> str:
+        return "wallet_session"
+
+    @property
+    def wallet_address(self) -> str:
+        return self._wallet_address
 
 
 def get_auth_from_env() -> Optional[AuthStrategy]:

@@ -99,3 +99,25 @@ cython_debug/
 # Local development
 .python-version
 *.local
+
+# Secrets / credentials (never commit)
+*.key
+*.pem
+*.crt
+*.p12
+*.jks
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Ruff cache
+.ruff_cache/
+
+# Coverage
+coverage/
+
+# AI agent context
+CLAUDE.md
+AGENTS.md

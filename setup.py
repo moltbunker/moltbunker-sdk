@@ -8,7 +8,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="moltbunker",
-    version="0.1.0",
+    version="0.2.0",
     author="Moltbunker Team",
     author_email="team@moltbunker.com",
     description="Python SDK for Moltbunker - Permissionless P2P Container Runtime for AI Agents",
@@ -37,22 +37,18 @@ setup(
         "pydantic>=2.0.0",
     ],
     extras_require={
-        # Wallet authentication for AI agents
         "wallet": [
             "web3>=6.0.0",
             "eth-account>=0.9.0",
         ],
-        # SKILL.md parsing
-        "skill": [
-            "PyYAML>=6.0",
+        "ws": [
+            "websockets>=11.0",
         ],
-        # Full installation with all features
         "full": [
             "web3>=6.0.0",
             "eth-account>=0.9.0",
-            "PyYAML>=6.0",
+            "websockets>=11.0",
         ],
-        # Development dependencies
         "dev": [
             "pytest>=7.0.0",
             "pytest-asyncio>=0.21.0",
@@ -60,9 +56,10 @@ setup(
             "black>=23.0.0",
             "mypy>=1.0.0",
             "ruff>=0.1.0",
+            "respx>=0.20.0",
             "web3>=6.0.0",
             "eth-account>=0.9.0",
-            "PyYAML>=6.0",
+            "websockets>=11.0",
         ],
     },
 )
