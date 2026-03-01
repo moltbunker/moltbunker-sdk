@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-03-01
+
+### Added
+
+- **Web Crawling** — Full crawl service API coverage
+  - `create_crawl_job()` — submit multi-page crawl jobs with depth, selectors, Tor routing
+  - `list_crawl_jobs()`, `get_crawl_job()` — track job status
+  - `get_crawl_results()` — retrieve per-page results (HTML, text, links, selectors, screenshots)
+  - `cancel_crawl_job()` — cancel running jobs
+  - `crawl_page()` — single-page synchronous crawl
+  - `get_crawl_stats()` — aggregated crawl statistics
+- **AI Agent Runtime** — Full agent service API coverage
+  - `deploy_agent()` — deploy agents with framework support (LangGraph, CrewAI, AutoGen, custom)
+  - `list_agents()`, `get_agent()`, `delete_agent()` — manage deployments
+  - `invoke_agent()` — send messages to agents and get responses
+  - `stop_agent()` — stop running agents
+  - `list_agent_memory()`, `set_agent_memory()`, `delete_agent_memory()` — persistent agent memory
+- **New Models** — `CrawlConfig`, `CrawlJob`, `CrawlResult`, `CrawlStats`, `CrawlJobStatus`, `AgentSpec`, `AgentDeployment`, `AgentInvokeResponse`, `AgentStatus`, `MCPToolDef`, `MemoryEntry`
+- All new methods available on both `Client` (sync) and `AsyncClient` (async)
+
 ## [0.2.0] - 2026-02-15
 
 ### Added
@@ -56,5 +76,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - httpx >= 0.24.0
 - pydantic >= 2.0.0
 
+[0.3.0]: https://github.com/moltbunker/moltbunker-sdk/releases/tag/v0.3.0
 [0.2.0]: https://github.com/moltbunker/moltbunker-sdk/releases/tag/v0.2.0
 [0.1.0]: https://github.com/moltbunker/moltbunker-sdk/releases/tag/v0.1.0
