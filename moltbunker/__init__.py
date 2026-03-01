@@ -57,6 +57,10 @@ from .exceptions import (
 )
 from .exec import AsyncExecSession, ExecSession
 from .models import (
+    AgentDeployment,
+    AgentInvokeResponse,
+    AgentSpec,
+    AgentStatus,
     Bot,
     BotStatus,
     Catalog,
@@ -69,7 +73,14 @@ from .models import (
     Container,
     ContainerInfo,
     ContainerStatus,
+    CrawlConfig,
+    CrawlJob,
+    CrawlJobStatus,
+    CrawlResult,
+    CrawlStats,
     Deployment,
+    MCPToolDef,
+    MemoryEntry,
     Migration,
     MigrationStatus,
     NetworkMode,
@@ -86,7 +97,7 @@ from .models import (
     WalletBalance,
 )
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __all__ = [
     # Clients
     "Client",
@@ -131,6 +142,19 @@ __all__ = [
     "CatalogTier",
     "Migration",
     "MigrationStatus",
+    # Crawling
+    "CrawlConfig",
+    "CrawlJob",
+    "CrawlJobStatus",
+    "CrawlResult",
+    "CrawlStats",
+    # Agents
+    "MCPToolDef",
+    "AgentSpec",
+    "AgentDeployment",
+    "AgentInvokeResponse",
+    "AgentStatus",
+    "MemoryEntry",
     # Exceptions
     "MoltbunkerError",
     "AuthenticationError",

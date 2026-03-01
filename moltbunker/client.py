@@ -32,6 +32,9 @@ from .exceptions import (
     TimeoutError,
 )
 from .models import (
+    AgentDeployment,
+    AgentInvokeResponse,
+    AgentSpec,
     Bot,
     Catalog,
     CatalogCategory,
@@ -39,7 +42,13 @@ from .models import (
     CatalogTier,
     Clone,
     ContainerInfo,
+    CrawlConfig,
+    CrawlJob,
+    CrawlResult,
+    CrawlStats,
     Deployment,
+    MCPToolDef,
+    MemoryEntry,
     Migration,
     Region,
     ReplicaLocation,
@@ -107,7 +116,7 @@ class BaseClient:
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "User-Agent": "moltbunker-python/0.2.0",
+            "User-Agent": "moltbunker-python/0.3.0",
         }
         headers.update(self._auth.get_auth_headers())
         return headers
@@ -985,6 +994,258 @@ class Client(BaseClient):
         """Get API status."""
         return self._request("GET", "/status")
 
+    # Crawling
+
+    def create_crawl_job(
+        self,
+        urls: List[str],
+        max_depth: int = 0,
+        max_pages: int = 100,
+        allowed_domains: Optional[List[str]] = None,
+        selectors: Optional[List[str]] = None,
+        screenshot: bool = False,
+        javascript: bool = False,
+        user_agent: str = "",
+        headers: Optional[Dict[str, str]] = None,
+        timeout_sec: int = 0,
+        respect_robots: bool = False,
+        use_tor: bool = False,
+        storage_bucket: str = "",
+    ) -> CrawlJob:
+        """Create a web crawl job.
+
+        Args:
+            urls: URLs to crawl
+            max_depth: Maximum crawl depth (0 = single page)
+            max_pages: Maximum pages to crawl
+            allowed_domains: Only follow links to these domains
+            selectors: CSS selectors to extract
+            screenshot: Capture screenshots
+            javascript: Enable JavaScript rendering
+            user_agent: Custom user agent string
+            headers: Custom HTTP headers
+            timeout_sec: Per-page timeout in seconds
+            respect_robots: Respect robots.txt
+            use_tor: Route crawl through Tor
+            storage_bucket: Store results in this Object Storage bucket
+
+        Returns:
+            CrawlJob with job ID and status
+        """
+        payload: Dict[str, Any] = {"urls": urls, "max_depth": max_depth, "max_pages": max_pages}
+        if allowed_domains:
+            payload["allowed_domains"] = allowed_domains
+        if selectors:
+            payload["selectors"] = selectors
+        if screenshot:
+            payload["screenshot"] = True
+        if javascript:
+            payload["javascript"] = True
+        if user_agent:
+            payload["user_agent"] = user_agent
+        if headers:
+            payload["headers"] = headers
+        if timeout_sec:
+            payload["timeout_sec"] = timeout_sec
+        if respect_robots:
+            payload["respect_robots"] = True
+        if use_tor:
+            payload["use_tor"] = True
+        if storage_bucket:
+            payload["storage_bucket"] = storage_bucket
+
+        data = self._request("POST", "/crawl/jobs", json=payload)
+        return _parse_crawl_job(data)
+
+    def list_crawl_jobs(self) -> List[CrawlJob]:
+        """List crawl jobs."""
+        data = self._request("GET", "/crawl/jobs")
+        return [_parse_crawl_job(item) for item in data.get("jobs", [])]
+
+    def get_crawl_job(self, job_id: str) -> CrawlJob:
+        """Get crawl job by ID."""
+        data = self._request("GET", f"/crawl/jobs/{job_id}")
+        return _parse_crawl_job(data)
+
+    def get_crawl_results(self, job_id: str) -> List[CrawlResult]:
+        """Get results for a crawl job."""
+        data = self._request("GET", f"/crawl/jobs/{job_id}/results")
+        return [_parse_crawl_result(r) for r in data.get("results", [])]
+
+    def cancel_crawl_job(self, job_id: str) -> None:
+        """Cancel a running crawl job."""
+        self._request("POST", f"/crawl/jobs/{job_id}/cancel")
+
+    def crawl_page(
+        self,
+        url: str,
+        selectors: Optional[List[str]] = None,
+        screenshot: bool = False,
+        javascript: bool = False,
+        user_agent: str = "",
+        headers: Optional[Dict[str, str]] = None,
+        timeout_sec: int = 0,
+    ) -> CrawlJob:
+        """Crawl a single page synchronously.
+
+        Args:
+            url: URL to crawl
+            selectors: CSS selectors to extract
+            screenshot: Capture screenshot
+            javascript: Enable JavaScript rendering
+            user_agent: Custom user agent
+            headers: Custom HTTP headers
+            timeout_sec: Timeout in seconds
+
+        Returns:
+            CrawlJob with results
+        """
+        payload: Dict[str, Any] = {"url": url}
+        if selectors:
+            payload["selectors"] = selectors
+        if screenshot:
+            payload["screenshot"] = True
+        if javascript:
+            payload["javascript"] = True
+        if user_agent:
+            payload["user_agent"] = user_agent
+        if headers:
+            payload["headers"] = headers
+        if timeout_sec:
+            payload["timeout_sec"] = timeout_sec
+
+        data = self._request("POST", "/crawl/pages", json=payload)
+        return _parse_crawl_job(data)
+
+    def get_crawl_stats(self) -> CrawlStats:
+        """Get aggregated crawl statistics."""
+        data = self._request("GET", "/crawl/stats")
+        return CrawlStats(**data)
+
+    # Agents
+
+    def deploy_agent(
+        self,
+        name: str,
+        framework: str = "custom",
+        image: str = "",
+        config: Optional[Dict[str, str]] = None,
+        env: Optional[Dict[str, str]] = None,
+        mcp_tools: Optional[List[MCPToolDef]] = None,
+        memory_bucket: str = "",
+        max_tokens: int = 0,
+        timeout_sec: int = 0,
+        memory_limit_mb: int = 0,
+        cpu_cores: int = 0,
+    ) -> AgentDeployment:
+        """Deploy an AI agent.
+
+        Args:
+            name: Agent name
+            framework: Agent framework ("langgraph", "crewai", "autogen", "custom")
+            image: Container image (defaults based on framework)
+            config: Framework-specific configuration
+            env: Environment variables
+            mcp_tools: MCP tool definitions
+            memory_bucket: Object Storage bucket for agent memory
+            max_tokens: Token budget cap (0 = unlimited)
+            timeout_sec: Execution timeout (0 = unlimited)
+            memory_limit_mb: Memory limit in MB
+            cpu_cores: CPU cores
+
+        Returns:
+            AgentDeployment with agent ID and status
+        """
+        payload: Dict[str, Any] = {"name": name, "framework": framework}
+        if image:
+            payload["image"] = image
+        if config:
+            payload["config"] = config
+        if env:
+            payload["env"] = env
+        if mcp_tools:
+            payload["mcp_tools"] = [t.model_dump() for t in mcp_tools]
+        if memory_bucket:
+            payload["memory_bucket"] = memory_bucket
+        if max_tokens:
+            payload["max_tokens"] = max_tokens
+        if timeout_sec:
+            payload["timeout_sec"] = timeout_sec
+        if memory_limit_mb:
+            payload["memory_limit_mb"] = memory_limit_mb
+        if cpu_cores:
+            payload["cpu_cores"] = cpu_cores
+
+        data = self._request("POST", "/agents", json=payload)
+        return _parse_agent_deployment(data)
+
+    def list_agents(self) -> List[AgentDeployment]:
+        """List agent deployments."""
+        data = self._request("GET", "/agents")
+        return [_parse_agent_deployment(item) for item in data.get("agents", [])]
+
+    def get_agent(self, agent_id: str) -> AgentDeployment:
+        """Get agent deployment by ID."""
+        data = self._request("GET", f"/agents/{agent_id}")
+        return _parse_agent_deployment(data)
+
+    def delete_agent(self, agent_id: str) -> None:
+        """Delete an agent deployment."""
+        self._request("DELETE", f"/agents/{agent_id}")
+
+    def invoke_agent(
+        self,
+        agent_id: str,
+        message: str,
+        context: Optional[Dict[str, str]] = None,
+    ) -> AgentInvokeResponse:
+        """Invoke an agent with a message.
+
+        Args:
+            agent_id: Agent deployment ID
+            message: User message to send
+            context: Optional contextual data
+
+        Returns:
+            AgentInvokeResponse with agent's response
+        """
+        payload: Dict[str, Any] = {"message": message}
+        if context:
+            payload["context"] = context
+
+        data = self._request("POST", f"/agents/{agent_id}/invoke", json=payload)
+        return AgentInvokeResponse(**data)
+
+    def stop_agent(self, agent_id: str) -> None:
+        """Stop a running agent."""
+        self._request("POST", f"/agents/{agent_id}/stop")
+
+    def list_agent_memory(self, agent_id: str) -> List[MemoryEntry]:
+        """List memory entries for an agent."""
+        data = self._request("GET", f"/agents/{agent_id}/memory")
+        return [
+            MemoryEntry(
+                key=e.get("key", ""),
+                value=e.get("value", ""),
+                updated_at=_parse_dt(e.get("updated_at")),
+            )
+            for e in data.get("entries", [])
+        ]
+
+    def set_agent_memory(self, agent_id: str, key: str, value: str) -> None:
+        """Set a memory entry for an agent.
+
+        Args:
+            agent_id: Agent deployment ID
+            key: Memory key
+            value: Memory value
+        """
+        self._request("POST", f"/agents/{agent_id}/memory", json={"key": key, "value": value})
+
+    def delete_agent_memory(self, agent_id: str, key: str) -> None:
+        """Delete a memory entry for an agent."""
+        self._request("DELETE", f"/agents/{agent_id}/memory", params={"key": key})
+
 
 def _safe_float(val: Any) -> float:
     """Convert to float, returning 0.0 for empty/missing values."""
@@ -1002,6 +1263,84 @@ def _parse_balance(data: Dict[str, Any]) -> WalletBalance:
         deposited=_safe_float(data.get("deposited")),
         reserved=_safe_float(data.get("reserved")),
         available=_safe_float(data.get("available")),
+    )
+
+
+def _parse_crawl_result(data: Dict[str, Any]) -> CrawlResult:
+    """Parse a CrawlResult dict from the API."""
+    return CrawlResult(
+        url=data.get("url", ""),
+        status_code=data.get("status_code", 0),
+        content_type=data.get("content_type", ""),
+        title=data.get("title", ""),
+        html=data.get("html", ""),
+        text=data.get("text", ""),
+        links=data.get("links", []),
+        selectors=data.get("selectors", {}),
+        screenshot_cid=data.get("screenshot_cid", ""),
+        crawled_at=_parse_dt(data.get("crawled_at")),
+        duration_ms=data.get("duration_ms", 0),
+        error=data.get("error", ""),
+        byte_size=data.get("byte_size", 0),
+    )
+
+
+def _parse_crawl_job(data: Dict[str, Any]) -> CrawlJob:
+    """Parse a CrawlJob dict from the API."""
+    config_data = data.get("config")
+    config = CrawlConfig(**config_data) if config_data else None
+
+    results_data = data.get("results", [])
+    results = [_parse_crawl_result(r) for r in results_data] if results_data else []
+
+    return CrawlJob(
+        id=data["id"],
+        owner=data.get("owner", ""),
+        status=data.get("status", ""),
+        config=config,
+        created_at=_parse_dt(data.get("created_at")),
+        started_at=_parse_dt(data.get("started_at")),
+        completed_at=_parse_dt(data.get("completed_at")),
+        error=data.get("error", ""),
+        pages_crawled=data.get("pages_crawled", 0),
+        total_bytes=data.get("total_bytes", 0),
+        results=results,
+    )
+
+
+def _parse_agent_deployment(data: Dict[str, Any]) -> AgentDeployment:
+    """Parse an AgentDeployment dict from the API."""
+    spec_data = data.get("spec")
+    spec = None
+    if spec_data:
+        mcp_tools = [MCPToolDef(**t) for t in spec_data.get("mcp_tools", [])]
+        spec = AgentSpec(
+            name=spec_data.get("name", ""),
+            framework=spec_data.get("framework", "custom"),
+            image=spec_data.get("image", ""),
+            config=spec_data.get("config", {}),
+            env=spec_data.get("env", {}),
+            mcp_tools=mcp_tools,
+            memory_bucket=spec_data.get("memory_bucket", ""),
+            max_tokens=spec_data.get("max_tokens", 0),
+            timeout_sec=spec_data.get("timeout_sec", 0),
+            memory_limit_mb=spec_data.get("memory_limit_mb", 0),
+            cpu_cores=spec_data.get("cpu_cores", 0),
+        )
+
+    return AgentDeployment(
+        id=data["id"],
+        spec=spec,
+        status=data.get("status", ""),
+        container_id=data.get("container_id", ""),
+        node_id=data.get("node_id", ""),
+        created_at=_parse_dt(data.get("created_at")),
+        started_at=_parse_dt(data.get("started_at")),
+        stopped_at=_parse_dt(data.get("stopped_at")),
+        error=data.get("error", ""),
+        tokens_used=data.get("tokens_used", 0),
+        invocation_count=data.get("invocation_count", 0),
+        total_cost_wei=data.get("total_cost_wei", ""),
     )
 
 
@@ -1611,3 +1950,193 @@ class AsyncClient(BaseClient):
     async def get_status(self) -> Dict[str, Any]:
         """Get API status."""
         return await self._request("GET", "/status")
+
+    # Crawling
+
+    async def create_crawl_job(
+        self,
+        urls: List[str],
+        max_depth: int = 0,
+        max_pages: int = 100,
+        allowed_domains: Optional[List[str]] = None,
+        selectors: Optional[List[str]] = None,
+        screenshot: bool = False,
+        javascript: bool = False,
+        user_agent: str = "",
+        headers: Optional[Dict[str, str]] = None,
+        timeout_sec: int = 0,
+        respect_robots: bool = False,
+        use_tor: bool = False,
+        storage_bucket: str = "",
+    ) -> CrawlJob:
+        """Create a web crawl job."""
+        payload: Dict[str, Any] = {"urls": urls, "max_depth": max_depth, "max_pages": max_pages}
+        if allowed_domains:
+            payload["allowed_domains"] = allowed_domains
+        if selectors:
+            payload["selectors"] = selectors
+        if screenshot:
+            payload["screenshot"] = True
+        if javascript:
+            payload["javascript"] = True
+        if user_agent:
+            payload["user_agent"] = user_agent
+        if headers:
+            payload["headers"] = headers
+        if timeout_sec:
+            payload["timeout_sec"] = timeout_sec
+        if respect_robots:
+            payload["respect_robots"] = True
+        if use_tor:
+            payload["use_tor"] = True
+        if storage_bucket:
+            payload["storage_bucket"] = storage_bucket
+
+        data = await self._request("POST", "/crawl/jobs", json=payload)
+        return _parse_crawl_job(data)
+
+    async def list_crawl_jobs(self) -> List[CrawlJob]:
+        """List crawl jobs."""
+        data = await self._request("GET", "/crawl/jobs")
+        return [_parse_crawl_job(item) for item in data.get("jobs", [])]
+
+    async def get_crawl_job(self, job_id: str) -> CrawlJob:
+        """Get crawl job by ID."""
+        data = await self._request("GET", f"/crawl/jobs/{job_id}")
+        return _parse_crawl_job(data)
+
+    async def get_crawl_results(self, job_id: str) -> List[CrawlResult]:
+        """Get results for a crawl job."""
+        data = await self._request("GET", f"/crawl/jobs/{job_id}/results")
+        return [_parse_crawl_result(r) for r in data.get("results", [])]
+
+    async def cancel_crawl_job(self, job_id: str) -> None:
+        """Cancel a running crawl job."""
+        await self._request("POST", f"/crawl/jobs/{job_id}/cancel")
+
+    async def crawl_page(
+        self,
+        url: str,
+        selectors: Optional[List[str]] = None,
+        screenshot: bool = False,
+        javascript: bool = False,
+        user_agent: str = "",
+        headers: Optional[Dict[str, str]] = None,
+        timeout_sec: int = 0,
+    ) -> CrawlJob:
+        """Crawl a single page synchronously."""
+        payload: Dict[str, Any] = {"url": url}
+        if selectors:
+            payload["selectors"] = selectors
+        if screenshot:
+            payload["screenshot"] = True
+        if javascript:
+            payload["javascript"] = True
+        if user_agent:
+            payload["user_agent"] = user_agent
+        if headers:
+            payload["headers"] = headers
+        if timeout_sec:
+            payload["timeout_sec"] = timeout_sec
+
+        data = await self._request("POST", "/crawl/pages", json=payload)
+        return _parse_crawl_job(data)
+
+    async def get_crawl_stats(self) -> CrawlStats:
+        """Get aggregated crawl statistics."""
+        data = await self._request("GET", "/crawl/stats")
+        return CrawlStats(**data)
+
+    # Agents
+
+    async def deploy_agent(
+        self,
+        name: str,
+        framework: str = "custom",
+        image: str = "",
+        config: Optional[Dict[str, str]] = None,
+        env: Optional[Dict[str, str]] = None,
+        mcp_tools: Optional[List[MCPToolDef]] = None,
+        memory_bucket: str = "",
+        max_tokens: int = 0,
+        timeout_sec: int = 0,
+        memory_limit_mb: int = 0,
+        cpu_cores: int = 0,
+    ) -> AgentDeployment:
+        """Deploy an AI agent."""
+        payload: Dict[str, Any] = {"name": name, "framework": framework}
+        if image:
+            payload["image"] = image
+        if config:
+            payload["config"] = config
+        if env:
+            payload["env"] = env
+        if mcp_tools:
+            payload["mcp_tools"] = [t.model_dump() for t in mcp_tools]
+        if memory_bucket:
+            payload["memory_bucket"] = memory_bucket
+        if max_tokens:
+            payload["max_tokens"] = max_tokens
+        if timeout_sec:
+            payload["timeout_sec"] = timeout_sec
+        if memory_limit_mb:
+            payload["memory_limit_mb"] = memory_limit_mb
+        if cpu_cores:
+            payload["cpu_cores"] = cpu_cores
+
+        data = await self._request("POST", "/agents", json=payload)
+        return _parse_agent_deployment(data)
+
+    async def list_agents(self) -> List[AgentDeployment]:
+        """List agent deployments."""
+        data = await self._request("GET", "/agents")
+        return [_parse_agent_deployment(item) for item in data.get("agents", [])]
+
+    async def get_agent(self, agent_id: str) -> AgentDeployment:
+        """Get agent deployment by ID."""
+        data = await self._request("GET", f"/agents/{agent_id}")
+        return _parse_agent_deployment(data)
+
+    async def delete_agent(self, agent_id: str) -> None:
+        """Delete an agent deployment."""
+        await self._request("DELETE", f"/agents/{agent_id}")
+
+    async def invoke_agent(
+        self,
+        agent_id: str,
+        message: str,
+        context: Optional[Dict[str, str]] = None,
+    ) -> AgentInvokeResponse:
+        """Invoke an agent with a message."""
+        payload: Dict[str, Any] = {"message": message}
+        if context:
+            payload["context"] = context
+
+        data = await self._request("POST", f"/agents/{agent_id}/invoke", json=payload)
+        return AgentInvokeResponse(**data)
+
+    async def stop_agent(self, agent_id: str) -> None:
+        """Stop a running agent."""
+        await self._request("POST", f"/agents/{agent_id}/stop")
+
+    async def list_agent_memory(self, agent_id: str) -> List[MemoryEntry]:
+        """List memory entries for an agent."""
+        data = await self._request("GET", f"/agents/{agent_id}/memory")
+        return [
+            MemoryEntry(
+                key=e.get("key", ""),
+                value=e.get("value", ""),
+                updated_at=_parse_dt(e.get("updated_at")),
+            )
+            for e in data.get("entries", [])
+        ]
+
+    async def set_agent_memory(self, agent_id: str, key: str, value: str) -> None:
+        """Set a memory entry for an agent."""
+        await self._request(
+            "POST", f"/agents/{agent_id}/memory", json={"key": key, "value": value}
+        )
+
+    async def delete_agent_memory(self, agent_id: str, key: str) -> None:
+        """Delete a memory entry for an agent."""
+        await self._request("DELETE", f"/agents/{agent_id}/memory", params={"key": key})
