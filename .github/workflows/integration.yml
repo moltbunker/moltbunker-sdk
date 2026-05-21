@@ -1,0 +1,71 @@
+name: Integration Tests (Testnet)
+
+# This workflow runs live integration tests against the Base Sepolia testnet.
+# It is SEPARATE from the unit-test workflow so that:
+#   1. Unit tests remain fast and always runnable without secrets.
+#   2. Integration tests run on a schedule + on-demand, giving early warning
+#      when the live API drifts from what the SDK expects.
+#
+# Required secret: MOLTBUNKER_TESTNET_PRIVATE_KEY
+#   A Base Sepolia wallet private key that holds test BUNKER tokens.
+#   Add it under Settings → Secrets and variables → Actions.
+
+on:
+  # Run nightly to catch API drift early
+    schedule:
+        - cron: "0 6 * * *"   # 06:00 UTC daily
+
+          # Allow maintainers to trigger a run manually from the Actions tab
+            workflow_dispatch:
+
+              # Also run when a PR touches the integration test file itself
+                pull_request:
+                    paths:
+                          - "tests/test_integration_testnet.py"
+                                - ".github/workflows/integration.yml"
+
+                                jobs:
+                                  integration:
+                                      name: "Integration – Python ${{ matrix.python-version }}"
+                                          runs-on: ubuntu-latest
+
+                                              # Don't block the run if the secret isn't present (e.g. fork PRs).
+                                                  # The tests themselves use pytest.mark.skipif, so they will be
+                                                      # reported as SKIPPED rather than FAILED.
+                                                          continue-on-error: true
+
+                                                              strategy:
+                                                                    fail-fast: false
+                                                                          matrix:
+                                                                                  # Test against the oldest and newest supported versions only to keep
+                                                                                          # runtime short. The full matrix lives in test.yml.
+                                                                                                  python-version: ["3.8", "3.12"]
+
+                                                                                                      steps:
+                                                                                                            - uses: actions/checkout@v4
+                                                                                                            
+                                                                                                                  - name: Set up Python ${{ matrix.python-version }}
+                                                                                                                          uses: actions/setup-python@v5
+                                                                                                                                  with:
+                                                                                                                                            python-version: ${{ matrix.python-version }}
+                                                                                                                                            
+                                                                                                                                                  - name: Install dependencies
+                                                                                                                                                          run: |
+                                                                                                                                                                    python -m pip install --upgrade pip
+                                                                                                                                                                              pip install -e ".[full]"
+                                                                                                                                                                              
+                                                                                                                                                                                    - name: Run integration tests
+                                                                                                                                                                                            env:
+                                                                                                                                                                                                      MOLTBUNKER_TESTNET_PRIVATE_KEY: ${{ secrets.MOLTBUNKER_TESTNET_PRIVATE_KEY }}
+                                                                                                                                                                                                              run: |
+                                                                                                                                                                                                                        pytest tests/test_integration_testnet.py -v --tb=short \
+                                                                                                                                                                                                                                    --junit-xml=integration-results-${{ matrix.python-version }}.xml
+                                                                                                                                                                                                                                    
+                                                                                                                                                                                                                                          - name: Upload test results
+                                                                                                                                                                                                                                                  if: always()
+                                                                                                                                                                                                                                                          uses: actions/upload-artifact@v4
+                                                                                                                                                                                                                                                                  with:
+                                                                                                                                                                                                                                                                            name: integration-results-py${{ matrix.python-version }}
+                                                                                                                                                                                                                                                                                      path: integration-results-${{ matrix.python-version }}.xml
+                                                                                                                                                                                                                                                                                                retention-days: 14
+                                                                                                                                                                                                                                                                                                
